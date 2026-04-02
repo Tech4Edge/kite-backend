@@ -24,7 +24,10 @@ export async function connectToDatabase() {
   const mongoUri = getMongoUri();
 
   cachedConnectionPromise = mongoose
-    .connect(mongoUri)
+    .connect(mongoUri, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000,
+    })
     .then((conn) => {
       cachedConnection = conn;
       console.log("MongoDB connected");

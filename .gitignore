@@ -14,4 +14,4 @@
 /backups
 /.mongodb-data
 
-.env
+/.env

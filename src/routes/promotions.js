@@ -6,7 +6,9 @@ const router = express.Router();
 // GET /api/promotions
 router.get('/', async (req, res) => {
   try {
-    const promos = await PromotionPackage.find().lean();
+    const onlyActive = req.query.active !== 'false';
+    const query = onlyActive ? { isActive: true } : {};
+    const promos = await PromotionPackage.find(query).sort({ displayOrder: 1, createdAt: -1 }).lean();
     res.json(promos);
   } catch (err) {
     console.error('Error fetching promotions', err);

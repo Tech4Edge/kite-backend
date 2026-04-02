@@ -67,8 +67,10 @@ ADMIN_PASSWORD_HASH=$2a$10$replace_with_real_bcrypt_hash
 ADMIN_JWT_SECRET=replace-with-strong-secret
 
 CLIENT_ORDER_EMAIL=orders@example.com
+ADMIN_ORDER_EMAIL=orders@example.com
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
+SMTP_SECURE=false
 SMTP_USER=your-user
 SMTP_PASS=your-pass
 SMTP_FROM=noreply@example.com
@@ -77,7 +79,9 @@ SMTP_FROM=noreply@example.com
 ### Important Notes
 
 - If `SMTP_HOST` is not set, backend uses Nodemailer's `jsonTransport` (safe local/dev behavior).
-- If `CLIENT_ORDER_EMAIL` is missing, order emails are skipped with a warning.
+- Use `ADMIN_ORDER_EMAIL` as the primary recipient for new order emails (`CLIENT_ORDER_EMAIL` is fallback for backward compatibility).
+- If neither `ADMIN_ORDER_EMAIL` nor `CLIENT_ORDER_EMAIL` is set, order emails are skipped with a warning.
+- `SMTP_SECURE=true` is recommended for port `465`; for port `587` use `SMTP_SECURE=false`.
 - If `ADMIN_EMAIL` or `ADMIN_PASSWORD_HASH` is missing, `/api/admin/login` returns server config error.
 - If `ADMIN_JWT_SECRET` is missing, code falls back to `change-me` (set your own in real envs).
 

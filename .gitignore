@@ -12,5 +12,6 @@
 /temp
 /uploads
 /backups
+/.mongodb-data
 
 .env

@@ -2,10 +2,16 @@ import nodemailer from 'nodemailer';
 
 export function createTransporter() {
   if (process.env.SMTP_HOST) {
+    const port = Number(process.env.SMTP_PORT || 587);
+    const secureFromEnv = String(process.env.SMTP_SECURE || '').toLowerCase();
+    const secure = secureFromEnv
+      ? secureFromEnv === 'true'
+      : port === 465;
+
     return nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: false,
+      port,
+      secure,
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
@@ -22,9 +28,9 @@ export function createTransporter() {
 export async function sendOrderEmail(order, productOrPromotion) {
   const transporter = createTransporter();
 
-  const clientEmail = process.env.CLIENT_ORDER_EMAIL;
-  if (!clientEmail) {
-    console.warn('CLIENT_ORDER_EMAIL not set; skipping email send');
+  const adminOrderEmail = process.env.ADMIN_ORDER_EMAIL || process.env.CLIENT_ORDER_EMAIL;
+  if (!adminOrderEmail) {
+    console.warn('ADMIN_ORDER_EMAIL (or CLIENT_ORDER_EMAIL) not set; skipping email send');
     return;
   }
 
@@ -60,8 +66,8 @@ export async function sendOrderEmail(order, productOrPromotion) {
   const text = lines.join('\n');
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || clientEmail,
-    to: clientEmail,
+    from: process.env.SMTP_FROM || adminOrderEmail,
+    to: adminOrderEmail,
     subject,
     text,
   });

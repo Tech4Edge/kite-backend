@@ -1,4 +1,11 @@
 {
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/api/health",
+      "permanent": false
+    }
+  ],
   "functions": {
     "api/[...all].js": {
       "maxDuration": 10

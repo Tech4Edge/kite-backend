@@ -27,6 +27,13 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+app.get("/api", (_req, res) => {
+  res.json({
+    name: "kite-backend",
+    status: "ok",
+  });
+});
+
 app.use("/api/products", productsRouter);
 app.use("/api/promotions", promotionsRouter);
 app.use("/api/orders", ordersRouter);

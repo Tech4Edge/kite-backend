@@ -1,5 +1,5 @@
 import request from "supertest";
-import app from "../index.js";
+import app from "../app.js";
 
 describe("Health endpoint", () => {
   it("returns ok status", async () => {
@@ -8,4 +8,3 @@ describe("Health endpoint", () => {
     expect(res.body).toEqual({ status: "ok" });
   });
 });
-

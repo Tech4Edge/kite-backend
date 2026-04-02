@@ -106,6 +106,32 @@ Run tests:
 npm test
 ```
 
+## Deploy on Vercel
+
+This backend is configured for Vercel serverless deployment using `api/[...all].js`.
+
+### Required Vercel Environment Variables
+
+- `MONGODB_URI`
+- `FRONTEND_ORIGIN`
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD_HASH`
+- `ADMIN_JWT_SECRET`
+- Email variables you use (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `ADMIN_ORDER_EMAIL`)
+
+### Deploy Steps
+
+1. Import this `backend` folder as a Vercel project.
+2. Set all required environment variables in Vercel Project Settings.
+3. Deploy.
+
+After deployment, API endpoints remain under `/api/*`.
+
+### Upload Storage Note (Important)
+
+- On Vercel, uploaded files are stored in serverless temp storage (`/tmp/uploads`) and are not durable across deployments/instances.
+- For production image persistence, switch to object storage (for example Cloudinary, S3, or Vercel Blob) and save public URLs in MongoDB.
+
 ## API Base URL
 
 - Local default: `http://localhost:5000`
@@ -341,7 +367,7 @@ export async function adminLogin(email, password) {
   const res = await fetch(`${API}/admin/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password }),
   });
   if (!res.ok) throw new Error("Invalid admin credentials");
   return res.json(); // { token }

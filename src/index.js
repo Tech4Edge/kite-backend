@@ -1,15 +1,14 @@
-import dotenv from "dotenv";
+import "./config/loadEnv.js";
 import app from "./app.js";
 import { connectToDatabase } from "./utils/db.js";
 
-dotenv.config();
-
 const port = process.env.PORT || 5000;
+const host = process.env.HOST || "0.0.0.0";
 
 connectToDatabase()
   .then(() => {
-    app.listen(port, () => {
-      console.log(`Server listening on port ${port}`);
+    app.listen(port, host, () => {
+      console.log(`Server listening on http://${host}:${port}`);
     });
   })
   .catch((err) => {

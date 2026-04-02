@@ -1,3 +1,4 @@
+import "./config/loadEnv.js";
 import express from "express";
 import cors from "cors";
 
@@ -12,10 +13,43 @@ import { getUploadsBaseDir } from "./utils/uploadsPath.js";
 
 const app = express();
 const uploadsDir = getUploadsBaseDir();
+const isProduction = process.env.NODE_ENV === "production";
+
+function getAllowedOrigins() {
+  const fromSingle = process.env.FRONTEND_ORIGIN || "";
+  const fromList = process.env.FRONTEND_ORIGINS || "";
+  const raw = `${fromSingle},${fromList}`
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (!raw.length && !isProduction) {
+    return ["http://localhost:5173", "http://127.0.0.1:5173"];
+  }
+
+  return raw;
+}
+
+const allowedOrigins = getAllowedOrigins();
+
+function corsOriginValidator(origin, callback) {
+  // Allow non-browser and same-origin requests.
+  if (!origin) {
+    callback(null, true);
+    return;
+  }
+
+  if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+    callback(null, true);
+    return;
+  }
+
+  callback(new Error(`CORS blocked for origin: ${origin}`));
+}
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+    origin: corsOriginValidator,
     credentials: false,
   }),
 );

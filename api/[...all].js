@@ -1,8 +1,6 @@
-import dotenv from "dotenv";
+import "../src/config/loadEnv.js";
 import app from "../src/app.js";
 import { connectToDatabase } from "../src/utils/db.js";
-
-dotenv.config();
 
 function isHealthRequest(req) {
   const path = req.url?.split("?")[0] || "";

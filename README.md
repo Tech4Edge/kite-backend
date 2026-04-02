@@ -2,8 +2,6 @@
 
 Backend API for Kite ecommerce/admin flows (products, promotion packages, orders, admin auth), built with Express + MongoDB (Mongoose).
 
-This README is written to help you (or Cursor at project root) quickly understand how the backend works and how to integrate a frontend app with it.
-
 ## Tech Stack
 
 - Node.js (ESM)
@@ -18,8 +16,12 @@ This README is written to help you (or Cursor at project root) quickly understan
 
 ```txt
 backend/
+  api/
+    [...all].js               # Vercel serverless entrypoint
+  vercel.json                 # Vercel function config
   src/
-    index.js                  # app bootstrap, middleware, route mounting, DB connect
+    app.js                    # express app, middleware, and route mounting
+    index.js                  # local server startup (non-serverless)
     models/
       Product.js              # product schema
       PromotionPackage.js     # promotion schema
@@ -34,15 +36,18 @@ backend/
       adminOrders.js          # admin order list/detail/status update
     utils/
       adminAuthMiddleware.js  # Bearer token verification
+      db.js                   # cached Mongo connection helper
       email.js                # SMTP/json transport + order email sender
+      uploadsPath.js          # runtime path helper
     __tests__/
       health.test.js          # health endpoint test
 ```
 
 ## How the Backend Works
 
-- `src/index.js` configures CORS + JSON parser, exposes `/api/health`, and mounts all routers under `/api/...`.
-- MongoDB connection is required at startup; server only begins listening after successful `mongoose.connect`.
+- `src/app.js` configures middleware, exposes `/api/health`, and mounts all routers under `/api/...`.
+- `src/index.js` starts the local Node server after successful database connection.
+- `api/[...all].js` is the Vercel serverless handler and reuses cached DB connections.
 - Public APIs:
   - list/get products
   - list/get promotions
@@ -127,11 +132,6 @@ This backend is configured for Vercel serverless deployment using `api/[...all].
 
 After deployment, API endpoints remain under `/api/*`.
 
-### Upload Storage Note (Important)
-
-- On Vercel, uploaded files are stored in serverless temp storage (`/tmp/uploads`) and are not durable across deployments/instances.
-- For production image persistence, switch to object storage (for example Cloudinary, S3, or Vercel Blob) and save public URLs in MongoDB.
-
 ## API Base URL
 
 - Local default: `http://localhost:5000`
@@ -166,7 +166,6 @@ Product model shape:
   "title": "string (required)",
   "iconType": "fire | layer | dish-wash | null",
   "description": "string",
-  "image": "string",
   "color": "string",
   "tagline": "string",
   "features": ["string"],
@@ -193,7 +192,6 @@ Promotion model shape:
   "id": "string (unique, required)",
   "title": "string (required)",
   "category": "string (required)",
-  "image": "string",
   "items": [{ "product": "string", "quantity": 0, "price": 0 }],
   "totalQuantity": 0,
   "totalPrice": 0
@@ -403,12 +401,8 @@ Typical error payload:
 - Includes only health endpoint test (`GET /api/health`).
 - Recommended: add route-level tests for orders/admin auth/admin CRUD before production.
 
-## Quick Cursor Context Notes
+## Notes
 
-If Cursor is opened at project root (`kite/`), this backend lives in `backend/` and exposes:
-
-- public commerce read/create APIs under `/api/products`, `/api/promotions`, `/api/orders`
-- JWT-protected admin APIs under `/api/admin/...`
-- Mongo-backed schemas in `backend/src/models/`
-
-This README is intended to be the single backend integration reference for frontend implementation.
+- Public APIs: `/api/products`, `/api/promotions`, `/api/orders`
+- Admin APIs: `/api/admin/...` (JWT protected)
+- Database models are in `src/models/`

@@ -6,7 +6,9 @@ const router = express.Router();
 // GET /api/products
 router.get('/', async (req, res) => {
   try {
-    const products = await Product.find().lean();
+    const onlyActive = req.query.active !== 'false';
+    const query = onlyActive ? { isActive: true } : {};
+    const products = await Product.find(query).sort({ displayOrder: 1, createdAt: -1 }).lean();
     res.json(products);
   } catch (err) {
     console.error('Error fetching products', err);

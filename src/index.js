@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 import productsRouter from './routes/products.js';
 import promotionsRouter from './routes/promotions.js';
@@ -14,6 +17,13 @@ import adminOrdersRouter from './routes/adminOrders.js';
 dotenv.config();
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 app.use(cors({
   origin: process.env.FRONTEND_ORIGIN || 'http://localhost:5173',
@@ -21,6 +31,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use('/uploads', express.static(uploadsDir));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -35,7 +46,11 @@ app.use('/api/admin/promotions', adminPromotionsRouter);
 app.use('/api/admin/orders', adminOrdersRouter);
 
 const port = process.env.PORT || 5000;
-const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/kite';
+const mongoUri =
+  process.env.MONGODB_URI ||
+  process.env.MONGO_URI ||
+  process.env.MONGODB_URL ||
+  'mongodb://127.0.0.1:27017/kite';
 
 mongoose.connect(mongoUri)
   .then(() => {
@@ -45,7 +60,13 @@ mongoose.connect(mongoUri)
     });
   })
   .catch((err) => {
-    console.error('MongoDB connection error', err);
+    if (String(err?.message || '').includes('ECONNREFUSED')) {
+      console.error(
+        `MongoDB is not reachable at ${mongoUri}. Start MongoDB service or set MONGODB_URI to a running instance (Atlas/local).`
+      );
+    } else {
+      console.error('MongoDB connection error', err);
+    }
     process.exit(1);
   });
 

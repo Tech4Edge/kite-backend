@@ -6,6 +6,17 @@ const router = express.Router();
 
 router.use(requireAdminAuth);
 
+// GET /api/admin/promotions
+router.get('/', async (req, res) => {
+  try {
+    const promos = await PromotionPackage.find().sort({ createdAt: -1 }).lean();
+    res.json(promos);
+  } catch (err) {
+    console.error('Error fetching promotions', err);
+    res.status(500).json({ message: 'Failed to fetch promotions' });
+  }
+});
+
 // POST /api/admin/promotions
 router.post('/', async (req, res) => {
   try {

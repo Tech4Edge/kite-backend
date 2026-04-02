@@ -39,6 +39,13 @@ function corsOriginValidator(origin, callback) {
     return;
   }
 
+  // If no allowlist is configured, allow all origins.
+  // This keeps production from failing closed due to missing env config.
+  if (!allowedOrigins.length) {
+    callback(null, true);
+    return;
+  }
+
   if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
     callback(null, true);
     return;

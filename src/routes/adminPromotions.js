@@ -53,7 +53,11 @@ function toNumber(value, defaultValue = 0) {
 }
 
 function buildFileUrl(req, file) {
-  return `${req.protocol}://${req.get("host")}/uploads/promotions/${file.filename}`;
+  const forwardedProto = (req.get("x-forwarded-proto") || "")
+    .split(",")[0]
+    .trim();
+  const protocol = forwardedProto || req.protocol;
+  return `${protocol}://${req.get("host")}/uploads/promotions/${file.filename}`;
 }
 
 function buildPayload(req) {

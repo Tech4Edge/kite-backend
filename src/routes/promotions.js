@@ -8,7 +8,11 @@ function normalizeMediaUrl(url, req) {
   const uploadPathMatch = url.match(/\/uploads\/(products|promotions)\/.+$/i);
   if (!uploadPathMatch) return url;
   const normalizedPath = uploadPathMatch[0].replace(/\\/g, "/");
-  return `${req.protocol}://${req.get("host")}${normalizedPath}`;
+  const forwardedProto = (req.get("x-forwarded-proto") || "")
+    .split(",")[0]
+    .trim();
+  const protocol = forwardedProto || req.protocol;
+  return `${protocol}://${req.get("host")}${normalizedPath}`;
 }
 
 function normalizePromotionMedia(promo, req) {

@@ -15,6 +15,9 @@ const app = express();
 const uploadsDir = getUploadsBaseDir();
 const frontendOrigin = (process.env.FRONTEND_ORIGIN || "").trim();
 
+// Respect reverse-proxy headers (e.g. Vercel) so req.protocol is correct.
+app.set("trust proxy", true);
+
 function normalizeOrigin(value) {
   return String(value || "")
     .trim()

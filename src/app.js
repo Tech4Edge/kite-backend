@@ -14,6 +14,7 @@ import { getUploadsBaseDir } from "./utils/uploadsPath.js";
 const app = express();
 const uploadsDir = getUploadsBaseDir();
 const frontendOrigin = (process.env.FRONTEND_ORIGIN || "").trim();
+const frontendOrigins = (process.env.FRONTEND_ORIGINS || "").trim();
 
 // Respect reverse-proxy headers (e.g. Vercel) so req.protocol is correct.
 app.set("trust proxy", true);
@@ -25,10 +26,18 @@ function normalizeOrigin(value) {
     .toLowerCase();
 }
 
-const allowedOrigins = frontendOrigin
+const allowedOrigins = `${frontendOrigin},${frontendOrigins}`
   .split(",")
   .map((value) => normalizeOrigin(value))
   .filter(Boolean);
+
+if (!allowedOrigins.length && process.env.NODE_ENV !== "production") {
+  allowedOrigins.push("http://localhost:5173", "http://127.0.0.1:5173");
+}
+
+function isVercelPreviewOrigin(origin) {
+  return /https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin);
+}
 
 function corsOriginValidator(origin, callback) {
   // Allow non-browser and same-origin requests.
@@ -43,7 +52,19 @@ function corsOriginValidator(origin, callback) {
     return;
   }
 
-  if (allowedOrigins.includes(normalizeOrigin(origin))) {
+  const normalizedOrigin = normalizeOrigin(origin);
+
+  if (allowedOrigins.includes(normalizedOrigin)) {
+    callback(null, true);
+    return;
+  }
+
+  // Optional safety valve for Vercel previews when env vars lag behind deployments.
+  if (
+    process.env.VERCEL &&
+    process.env.ALLOW_VERCEL_PREVIEW_ORIGINS !== "false" &&
+    isVercelPreviewOrigin(normalizedOrigin)
+  ) {
     callback(null, true);
     return;
   }
@@ -51,14 +72,15 @@ function corsOriginValidator(origin, callback) {
   callback(new Error(`CORS blocked for origin: ${origin}`));
 }
 
-app.use(
-  cors({
-    origin: corsOriginValidator,
-    credentials: true,
-    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  }),
-);
+const corsOptions = {
+  origin: corsOriginValidator,
+  credentials: true,
+  methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 app.use(express.json());
 app.use("/uploads", express.static(uploadsDir));

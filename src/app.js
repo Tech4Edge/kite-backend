@@ -13,7 +13,19 @@ import { getUploadsBaseDir } from "./utils/uploadsPath.js";
 
 const app = express();
 const uploadsDir = getUploadsBaseDir();
-const frontendOrigin = process.env.FRONTEND_ORIGIN;
+const frontendOrigin = (process.env.FRONTEND_ORIGIN || "").trim();
+
+function normalizeOrigin(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\/+$/, "")
+    .toLowerCase();
+}
+
+const allowedOrigins = frontendOrigin
+  .split(",")
+  .map((value) => normalizeOrigin(value))
+  .filter(Boolean);
 
 function corsOriginValidator(origin, callback) {
   // Allow non-browser and same-origin requests.
@@ -22,7 +34,13 @@ function corsOriginValidator(origin, callback) {
     return;
   }
 
-  if (origin === frontendOrigin) {
+  // If FRONTEND_ORIGIN is missing in env, fail open so deployment remains reachable.
+  if (!allowedOrigins.length) {
+    callback(null, true);
+    return;
+  }
+
+  if (allowedOrigins.includes(normalizeOrigin(origin))) {
     callback(null, true);
     return;
   }
@@ -35,6 +53,7 @@ app.use(
     origin: corsOriginValidator,
     credentials: true,
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   }),
 );
 

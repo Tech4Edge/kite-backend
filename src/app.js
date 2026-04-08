@@ -13,24 +13,7 @@ import { getUploadsBaseDir } from "./utils/uploadsPath.js";
 
 const app = express();
 const uploadsDir = getUploadsBaseDir();
-const isProduction = process.env.NODE_ENV === "production";
-
-function getAllowedOrigins() {
-  const fromSingle = process.env.FRONTEND_ORIGIN || "";
-  const fromList = process.env.FRONTEND_ORIGINS || "";
-  const raw = `${fromSingle},${fromList}`
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (!raw.length && !isProduction) {
-    return ["http://localhost:5173", "http://127.0.0.1:5173"];
-  }
-
-  return raw;
-}
-
-const allowedOrigins = getAllowedOrigins();
+const frontendOrigin = process.env.FRONTEND_ORIGIN;
 
 function corsOriginValidator(origin, callback) {
   // Allow non-browser and same-origin requests.
@@ -39,14 +22,7 @@ function corsOriginValidator(origin, callback) {
     return;
   }
 
-  // If no allowlist is configured, allow all origins.
-  // This keeps production from failing closed due to missing env config.
-  if (!allowedOrigins.length) {
-    callback(null, true);
-    return;
-  }
-
-  if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+  if (origin === frontendOrigin) {
     callback(null, true);
     return;
   }
@@ -57,7 +33,8 @@ function corsOriginValidator(origin, callback) {
 app.use(
   cors({
     origin: corsOriginValidator,
-    credentials: false,
+    credentials: true,
+    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   }),
 );
 

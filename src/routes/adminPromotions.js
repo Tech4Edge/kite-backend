@@ -2,28 +2,16 @@ import express from "express";
 import PromotionPackage from "../models/PromotionPackage.js";
 import { requireAdminAuth } from "../utils/adminAuthMiddleware.js";
 import multer from "multer";
-import path from "path";
-import { getUploadsSubDir } from "../utils/uploadsPath.js";
+import {
+  isCloudinaryConfigured,
+  uploadImageBuffer,
+} from "../utils/cloudinary.js";
 
 const router = express.Router();
-const uploadsDir = getUploadsSubDir("promotions");
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || "").toLowerCase();
-    const base = path
-      .basename(file.originalname || "image", ext)
-      .replace(/[^a-zA-Z0-9-_]/g, "-")
-      .toLowerCase();
-    cb(null, `${Date.now()}-${base}${ext}`);
-  },
-});
-
-const upload = multer({
-  storage,
+const parseMultipartForm = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 8 * 1024 * 1024 },
-});
+}).any();
 
 function parseJsonField(value, fallback = []) {
   if (value == null || value === "") return fallback;
@@ -35,6 +23,22 @@ function parseJsonField(value, fallback = []) {
   } catch {
     return fallback;
   }
+}
+
+function parseImage(value) {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function parseImagesField(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  const parsed = parseJsonField(value, []);
+  if (Array.isArray(parsed)) {
+    return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  return [];
 }
 
 function toBoolean(value, defaultValue = true) {
@@ -52,22 +56,55 @@ function toNumber(value, defaultValue = 0) {
   return Number.isFinite(n) ? n : defaultValue;
 }
 
-function buildFileUrl(req, file) {
-  const forwardedProto = (req.get("x-forwarded-proto") || "")
-    .split(",")[0]
-    .trim();
-  const protocol = forwardedProto || req.protocol;
-  return `${protocol}://${req.get("host")}/uploads/promotions/${file.filename}`;
+function pickPromotionImageFiles(files = []) {
+  const allFiles = Array.isArray(files) ? files : [];
+  const promotionImages = allFiles.filter(
+    (file) => file.fieldname === "promotionImages",
+  );
+  const image = allFiles.find((file) => file.fieldname === "image") || null;
+  const images = allFiles.filter((file) => file.fieldname === "images");
+
+  const primaryImage = promotionImages[0] || image;
+  const galleryImages = promotionImages.length ? promotionImages.slice(1) : images;
+
+  return { primaryImage, galleryImages };
+}
+
+async function applyCloudinaryUploads(req, payload) {
+  const { primaryImage, galleryImages } = pickPromotionImageFiles(req.files);
+  if (!primaryImage && !galleryImages.length) {
+    return { payload, hasPrimaryUpload: false, hasGalleryUpload: false };
+  }
+
+  if (!isCloudinaryConfigured()) {
+    const error = new Error("Cloudinary credentials are missing.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  if (primaryImage) {
+    payload.image = await uploadImageBuffer(primaryImage, {
+      folder: "kite/promotions",
+    });
+  }
+
+  if (galleryImages.length) {
+    payload.images = await Promise.all(
+      galleryImages.map((file) =>
+        uploadImageBuffer(file, { folder: "kite/promotions/gallery" }),
+      ),
+    );
+  }
+
+  return {
+    payload,
+    hasPrimaryUpload: Boolean(primaryImage),
+    hasGalleryUpload: galleryImages.length > 0,
+  };
 }
 
 function buildPayload(req) {
   const body = req.body || {};
-  const files = req.files || {};
-  const unifiedImageFiles = files.promotionImages || [];
-  const primaryImageFile = unifiedImageFiles[0] || files.image?.[0];
-  const galleryFiles = unifiedImageFiles.length
-    ? unifiedImageFiles.slice(1)
-    : files.images || [];
   const items = parseJsonField(body.items, []);
 
   const totalQuantityFromItems = items.reduce(
@@ -85,12 +122,8 @@ function buildPayload(req) {
     title: body.title,
     category: body.category,
     description: body.description || "",
-    image: primaryImageFile
-      ? buildFileUrl(req, primaryImageFile)
-      : body.image || "",
-    images: galleryFiles.length
-      ? galleryFiles.map((f) => buildFileUrl(req, f))
-      : parseJsonField(body.images, []),
+    image: parseImage(body.image),
+    images: parseImagesField(body.images),
     items,
     totalQuantity: items.length
       ? totalQuantityFromItems
@@ -121,14 +154,10 @@ router.get("/", async (req, res) => {
 // POST /api/admin/promotions
 router.post(
   "/",
-  upload.fields([
-    { name: "promotionImages", maxCount: 10 },
-    { name: "image", maxCount: 1 },
-    { name: "images", maxCount: 10 },
-  ]),
+  parseMultipartForm,
   async (req, res) => {
     try {
-      const data = buildPayload(req);
+      const { payload: data } = await applyCloudinaryUploads(req, buildPayload(req));
       if (!data.id || !data.title || !data.category) {
         return res.status(400).json({ message: "Missing required fields" });
       }
@@ -142,7 +171,9 @@ router.post(
       res.status(201).json(promo);
     } catch (err) {
       console.error("Error creating promotion", err);
-      res.status(500).json({ message: "Failed to create promotion" });
+      res
+        .status(err.statusCode || 500)
+        .json({ message: err.message || "Failed to create promotion" });
     }
   },
 );
@@ -150,23 +181,20 @@ router.post(
 // PUT /api/admin/promotions/:id
 router.put(
   "/:id",
-  upload.fields([
-    { name: "promotionImages", maxCount: 10 },
-    { name: "image", maxCount: 1 },
-    { name: "images", maxCount: 10 },
-  ]),
+  parseMultipartForm,
   async (req, res) => {
     try {
-      const data = buildPayload(req);
+      const { payload: data, hasPrimaryUpload, hasGalleryUpload } =
+        await applyCloudinaryUploads(req, buildPayload(req));
       const existing = await PromotionPackage.findOne({ id: req.params.id });
       if (!existing) {
         return res.status(404).json({ message: "Promotion not found" });
       }
 
-      if (!req.files?.promotionImages?.length && !req.files?.image?.length) {
+      if (!hasPrimaryUpload) {
         data.image = data.image || existing.image;
       }
-      if (!req.files?.promotionImages?.length && !req.files?.images?.length) {
+      if (!hasGalleryUpload) {
         data.images =
           Array.isArray(data.images) && data.images.length
             ? data.images
@@ -181,7 +209,9 @@ router.put(
       res.json(updated);
     } catch (err) {
       console.error("Error updating promotion", err);
-      res.status(500).json({ message: "Failed to update promotion" });
+      res
+        .status(err.statusCode || 500)
+        .json({ message: err.message || "Failed to update promotion" });
     }
   },
 );

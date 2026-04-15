@@ -9,10 +9,8 @@ import adminAuthRouter from "./routes/adminAuth.js";
 import adminProductsRouter from "./routes/adminProducts.js";
 import adminPromotionsRouter from "./routes/adminPromotions.js";
 import adminOrdersRouter from "./routes/adminOrders.js";
-import { getUploadsBaseDir } from "./utils/uploadsPath.js";
 
 const app = express();
-const uploadsDir = getUploadsBaseDir();
 const frontendOrigin = (process.env.FRONTEND_ORIGIN || "").trim();
 const frontendOrigins = (process.env.FRONTEND_ORIGINS || "").trim();
 
@@ -83,7 +81,6 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
 app.use(express.json());
-app.use("/uploads", express.static(uploadsDir));
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok" });

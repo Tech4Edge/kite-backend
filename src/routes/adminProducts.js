@@ -2,28 +2,19 @@ import express from "express";
 import Product from "../models/Product.js";
 import { requireAdminAuth } from "../utils/adminAuthMiddleware.js";
 import multer from "multer";
-import path from "path";
-import { getUploadsSubDir } from "../utils/uploadsPath.js";
+import {
+  isCloudinaryConfigured,
+  uploadImageBuffer,
+} from "../utils/cloudinary.js";
 
 const router = express.Router();
-const uploadsDir = getUploadsSubDir("products");
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || "").toLowerCase();
-    const base = path
-      .basename(file.originalname || "image", ext)
-      .replace(/[^a-zA-Z0-9-_]/g, "-")
-      .toLowerCase();
-    cb(null, `${Date.now()}-${base}${ext}`);
+const parseMultipartForm = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 8 * 1024 * 1024,
+    files: 10,
   },
-});
-
-const upload = multer({
-  storage,
-  limits: { fileSize: 8 * 1024 * 1024 }, // 8MB each
-});
+}).any();
 
 function parseJsonField(value, fallback = []) {
   if (value == null || value === "") return fallback;
@@ -35,6 +26,59 @@ function parseJsonField(value, fallback = []) {
   } catch {
     return fallback;
   }
+}
+
+function parseImage(value) {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function parseImagesField(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  const parsed = parseJsonField(value, []);
+  if (Array.isArray(parsed)) {
+    return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function pickProductImageFiles(files = []) {
+  const allFiles = Array.isArray(files) ? files : [];
+  const productImages = allFiles.filter((file) => file.fieldname === "productImages");
+  const image = allFiles.find((file) => file.fieldname === "image") || null;
+  const images = allFiles.filter((file) => file.fieldname === "images");
+
+  const primaryImage = productImages[0] || image;
+  const galleryImages = productImages.length ? productImages.slice(1) : images;
+
+  return { primaryImage, galleryImages };
+}
+
+async function applyCloudinaryUploads(req, payload) {
+  const { primaryImage, galleryImages } = pickProductImageFiles(req.files);
+  if (!primaryImage && !galleryImages.length) return payload;
+
+  if (!isCloudinaryConfigured()) {
+    const error = new Error("Cloudinary credentials are missing.");
+    error.statusCode = 500;
+    throw error;
+  }
+
+  if (primaryImage) {
+    payload.image = await uploadImageBuffer(primaryImage, { folder: "kite/products" });
+  }
+
+  if (galleryImages.length) {
+    payload.images = await Promise.all(
+      galleryImages.map((file) =>
+        uploadImageBuffer(file, { folder: "kite/products/gallery" }),
+      ),
+    );
+  }
+
+  return payload;
 }
 
 function toBoolean(value, defaultValue = true) {
@@ -52,22 +96,8 @@ function toNumber(value, defaultValue = 0) {
   return Number.isFinite(n) ? n : defaultValue;
 }
 
-function buildFileUrl(req, file) {
-  const forwardedProto = (req.get("x-forwarded-proto") || "")
-    .split(",")[0]
-    .trim();
-  const protocol = forwardedProto || req.protocol;
-  return `${protocol}://${req.get("host")}/uploads/products/${file.filename}`;
-}
-
 function buildPayload(req) {
   const body = req.body || {};
-  const files = req.files || {};
-  const unifiedImageFiles = files.productImages || [];
-  const primaryImageFile = unifiedImageFiles[0] || files.image?.[0];
-  const galleryFiles = unifiedImageFiles.length
-    ? unifiedImageFiles.slice(1)
-    : files.images || [];
 
   return {
     id: body.id,
@@ -77,12 +107,9 @@ function buildPayload(req) {
     navGroup: body.navGroup || "",
     iconType: body.iconType || null,
     description: body.description || "",
-    image: primaryImageFile
-      ? buildFileUrl(req, primaryImageFile)
-      : body.image || "",
-    images: galleryFiles.length
-      ? galleryFiles.map((f) => buildFileUrl(req, f))
-      : parseJsonField(body.images, []),
+    // Expect pre-uploaded Cloudinary URLs/public links from client.
+    image: parseImage(body.image),
+    images: parseImagesField(body.images),
     color: body.color || "",
     tagline: body.tagline || "",
     features: parseJsonField(body.features, []),
@@ -117,14 +144,10 @@ router.get("/", async (req, res) => {
 // POST /api/admin/products
 router.post(
   "/",
-  upload.fields([
-    { name: "productImages", maxCount: 10 },
-    { name: "image", maxCount: 1 },
-    { name: "images", maxCount: 10 },
-  ]),
+  parseMultipartForm,
   async (req, res) => {
     try {
-      const data = buildPayload(req);
+      const data = await applyCloudinaryUploads(req, buildPayload(req));
       if (!data.id || !data.title || !data.category) {
         return res.status(400).json({ message: "Missing required fields" });
       }
@@ -138,7 +161,9 @@ router.post(
       res.status(201).json(product);
     } catch (err) {
       console.error("Error creating product", err);
-      res.status(500).json({ message: "Failed to create product" });
+      res
+        .status(err.statusCode || 500)
+        .json({ message: err.message || "Failed to create product" });
     }
   },
 );
@@ -146,25 +171,20 @@ router.post(
 // PUT /api/admin/products/:id
 router.put(
   "/:id",
-  upload.fields([
-    { name: "productImages", maxCount: 10 },
-    { name: "image", maxCount: 1 },
-    { name: "images", maxCount: 10 },
-  ]),
+  parseMultipartForm,
   async (req, res) => {
     try {
-      const data = buildPayload(req);
+      const data = await applyCloudinaryUploads(req, buildPayload(req));
       const existing = await Product.findOne({ id: req.params.id });
       if (!existing) {
         return res.status(404).json({ message: "Product not found" });
       }
 
-      if (!req.files?.image?.length) data.image = data.image || existing.image;
-      if (!req.files?.images?.length)
-        data.images =
-          Array.isArray(data.images) && data.images.length
-            ? data.images
-            : existing.images || [];
+      data.image = data.image || existing.image;
+      data.images =
+        Array.isArray(data.images) && data.images.length
+          ? data.images
+          : existing.images || [];
 
       const updated = await Product.findOneAndUpdate(
         { id: req.params.id },
@@ -174,7 +194,9 @@ router.put(
       res.json(updated);
     } catch (err) {
       console.error("Error updating product", err);
-      res.status(500).json({ message: "Failed to update product" });
+      res
+        .status(err.statusCode || 500)
+        .json({ message: err.message || "Failed to update product" });
     }
   },
 );

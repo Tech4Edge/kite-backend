@@ -38,7 +38,7 @@ backend/
       adminAuthMiddleware.js  # Bearer token verification
       db.js                   # cached Mongo connection helper
       email.js                # SMTP/json transport + order email sender
-      uploadsPath.js          # runtime path helper
+      cloudinary.js           # Cloudinary upload helper
     __tests__/
       health.test.js          # health endpoint test
 ```
@@ -79,6 +79,9 @@ SMTP_SECURE=false
 SMTP_USER=your-user
 SMTP_PASS=your-pass
 SMTP_FROM=noreply@example.com
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
 ```
 
 ### Important Notes

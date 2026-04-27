@@ -44,6 +44,17 @@ function parseImagesField(value) {
   return [];
 }
 
+function parseVariantImagesField(value) {
+  const parsed = parseJsonField(value, []);
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((item) => ({
+      name: String(item?.name || "").trim(),
+      image: parseImage(item?.image),
+    }))
+    .filter((item) => item.name || item.image);
+}
+
 function pickProductImageFiles(files = []) {
   const allFiles = Array.isArray(files) ? files : [];
   const productImages = allFiles.filter((file) => file.fieldname === "productImages");
@@ -58,7 +69,18 @@ function pickProductImageFiles(files = []) {
 
 async function applyCloudinaryUploads(req, payload) {
   const { primaryImage, galleryImages } = pickProductImageFiles(req.files);
-  if (!primaryImage && !galleryImages.length) return payload;
+  const allFiles = Array.isArray(req.files) ? req.files : [];
+  const variantImageFiles = allFiles
+    .filter((file) => /^variantImageFile_\d+$/i.test(file.fieldname))
+    .map((file) => ({
+      ...file,
+      variantIndex: Number(file.fieldname.split("_").pop()),
+    }))
+    .filter((file) => Number.isInteger(file.variantIndex) && file.variantIndex >= 0)
+    .sort((a, b) => a.variantIndex - b.variantIndex);
+  if (!primaryImage && !galleryImages.length && !variantImageFiles.length) {
+    return payload;
+  }
 
   if (!isCloudinaryConfigured()) {
     const error = new Error("Cloudinary credentials are missing.");
@@ -75,6 +97,27 @@ async function applyCloudinaryUploads(req, payload) {
       galleryImages.map((file) =>
         uploadImageBuffer(file, { folder: "kite/products/gallery" }),
       ),
+    );
+  }
+
+  if (variantImageFiles.length) {
+    const uploadedVariantImages = await Promise.all(
+      variantImageFiles.map((file) =>
+        uploadImageBuffer(file, { folder: "kite/products/variants" }),
+      ),
+    );
+    const nextVariantImages = Array.isArray(payload.variantImages)
+      ? [...payload.variantImages]
+      : [];
+    uploadedVariantImages.forEach((uploadedUrl, idx) => {
+      const variantIndex = variantImageFiles[idx].variantIndex;
+      nextVariantImages[variantIndex] = {
+        name: String(nextVariantImages[variantIndex]?.name || "").trim(),
+        image: uploadedUrl,
+      };
+    });
+    payload.variantImages = nextVariantImages.filter(
+      (item) => item?.name || item?.image,
     );
   }
 
@@ -114,6 +157,7 @@ function buildPayload(req) {
     tagline: body.tagline || "",
     features: parseJsonField(body.features, []),
     variants: parseJsonField(body.variants, []),
+    variantImages: parseVariantImagesField(body.variantImages),
     brands: parseJsonField(body.brands, []),
     sizes: parseJsonField(body.sizes, []),
     skus: parseJsonField(body.skus, []),
@@ -175,6 +219,10 @@ router.put(
   async (req, res) => {
     try {
       const data = await applyCloudinaryUploads(req, buildPayload(req));
+      const hasVariantImagesField = Object.prototype.hasOwnProperty.call(
+        req.body || {},
+        "variantImages",
+      );
       const existing = await Product.findOne({ id: req.params.id });
       if (!existing) {
         return res.status(404).json({ message: "Product not found" });
@@ -185,6 +233,9 @@ router.put(
         Array.isArray(data.images) && data.images.length
           ? data.images
           : existing.images || [];
+      if (!hasVariantImagesField) {
+        data.variantImages = existing.variantImages || [];
+      }
 
       const updated = await Product.findOneAndUpdate(
         { id: req.params.id },

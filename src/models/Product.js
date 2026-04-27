@@ -35,6 +35,11 @@ const VariantSchema = new mongoose.Schema({
   price: Number,
 }, { _id: false });
 
+const VariantImageSchema = new mongoose.Schema({
+  name: String,
+  image: String,
+}, { _id: false });
+
 const ProductSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   category: { type: String, required: true },
@@ -49,6 +54,7 @@ const ProductSchema = new mongoose.Schema({
   tagline: { type: String },
   features: [{ type: String }],
   variants: [VariantSchema],
+  variantImages: [VariantImageSchema],
   brands: [BrandSchema],
   sizes: [SizeSchema],
   skus: [SkuSchema],

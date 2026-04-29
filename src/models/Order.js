@@ -5,6 +5,7 @@ const OrderSchema = new mongoose.Schema({
   productId: { type: String },
   promotionId: { type: String },
   selectedSkuOrSize: { type: String },
+  quantity: { type: Number, required: true, min: 1, max: 1000 },
   customerName: { type: String, required: true },
   phone: { type: String, required: true },
   email: { type: String },

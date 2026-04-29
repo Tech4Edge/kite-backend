@@ -119,6 +119,7 @@ export async function sendOrderEmail(order, productOrPromotion) {
   if (order.selectedSkuOrSize) {
     lines.push(`Selected SKU/Size: ${selectedSkuOrSize}`);
   }
+  lines.push(`Quantity: ${displayValue(order.quantity, 1)}`);
   lines.push("");
   lines.push("Customer Details:");
   lines.push(`Name: ${order.customerName}`);
@@ -204,6 +205,7 @@ export async function sendOrderEmail(order, productOrPromotion) {
                           ${buildInfoRow("Order ID", orderId)}
                           ${buildInfoRow(isProduct ? "Product" : "Promotion Package", itemName)}
                           ${order.selectedSkuOrSize ? buildInfoRow("Selected SKU/Size", selectedSkuOrSize) : ""}
+                          ${buildInfoRow("Quantity", displayValue(order.quantity, 1))}
                           ${buildInfoRow("Created At", createdAt)}
                         </table>
                       </td>

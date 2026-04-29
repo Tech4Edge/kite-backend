@@ -5,6 +5,7 @@ import PromotionPackage from '../models/PromotionPackage.js';
 import { sendOrderEmail } from '../utils/email.js';
 
 const router = express.Router();
+const PHONE_REGEX = /^(?:\+92|92|0)3\d{9}$/;
 
 // POST /api/orders
 router.post('/', async (req, res) => {
@@ -14,6 +15,7 @@ router.post('/', async (req, res) => {
       productId,
       promotionId,
       selectedSkuOrSize,
+      quantity,
       customerName,
       phone,
       email,
@@ -26,7 +28,20 @@ router.post('/', async (req, res) => {
     if (!['product', 'promotion'].includes(type)) {
       return res.status(400).json({ message: 'Invalid order type' });
     }
-    if (!customerName || !phone || !address || !city || !paymentMethod) {
+    const parsedQuantity = Number(quantity);
+    if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 1000) {
+      return res.status(400).json({ message: 'Quantity must be an integer between 1 and 1000' });
+    }
+
+    const normalizedCustomerName = String(customerName || '').trim();
+    const normalizedAddress = String(address || '').trim();
+    const normalizedCity = String(city || '').trim();
+    const normalizedPhone = String(phone || '').replace(/[\s()-]/g, '');
+    if (!PHONE_REGEX.test(normalizedPhone)) {
+      return res.status(400).json({ message: 'Invalid phone number format' });
+    }
+
+    if (!normalizedCustomerName || !normalizedAddress || !normalizedCity || !paymentMethod) {
       return res.status(400).json({ message: 'Missing required customer fields' });
     }
 
@@ -58,11 +73,12 @@ router.post('/', async (req, res) => {
       productId: type === 'product' ? productId : undefined,
       promotionId: type === 'promotion' ? promotionId : undefined,
       selectedSkuOrSize,
-      customerName,
-      phone,
+      quantity: parsedQuantity,
+      customerName: normalizedCustomerName,
+      phone: normalizedPhone,
       email,
-      address,
-      city,
+      address: normalizedAddress,
+      city: normalizedCity,
       note,
       paymentMethod,
     });

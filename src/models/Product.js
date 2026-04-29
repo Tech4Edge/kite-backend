@@ -61,6 +61,7 @@ const ProductSchema = new mongoose.Schema({
   facilities: [FacilitySchema],
   services: { type: String },
   displayOrder: { type: Number, default: 0 },
+  carouselOrder: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true },
   showOnLanding: { type: Boolean, default: true },
   showInProductsPage: { type: Boolean, default: true },

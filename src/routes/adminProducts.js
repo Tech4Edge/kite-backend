@@ -164,6 +164,7 @@ function buildPayload(req) {
     facilities: parseJsonField(body.facilities, []),
     services: body.services || "",
     displayOrder: toNumber(body.displayOrder, 0),
+    carouselOrder: toNumber(body.carouselOrder, 0),
     isActive: toBoolean(body.isActive, true),
     showOnLanding: toBoolean(body.showOnLanding, true),
     showInProductsPage: toBoolean(body.showInProductsPage, true),

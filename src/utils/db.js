@@ -30,7 +30,9 @@ export async function connectToDatabase() {
     })
     .then((conn) => {
       cachedConnection = conn;
-      console.log("MongoDB connected");
+      if (process.env.NODE_ENV !== "production") {
+        console.log("MongoDB connected");
+      }
       return conn;
     })
     .catch((err) => {

@@ -1,6 +1,8 @@
 import "./config/loadEnv.js";
 import express from "express";
 import cors from "cors";
+import compression from "compression";
+import helmet from "helmet";
 
 import productsRouter from "./routes/products.js";
 import promotionsRouter from "./routes/promotions.js";
@@ -16,6 +18,8 @@ const frontendOrigins = (process.env.FRONTEND_ORIGINS || "").trim();
 
 // Respect reverse-proxy headers (e.g. Vercel) so req.protocol is correct.
 app.set("trust proxy", true);
+app.use(helmet());
+app.use(compression());
 
 function normalizeOrigin(value) {
   return String(value || "")

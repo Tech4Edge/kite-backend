@@ -8,7 +8,9 @@ const host = process.env.HOST || "0.0.0.0";
 connectToDatabase()
   .then(() => {
     app.listen(port, host, () => {
-      console.log(`Server listening on http://${host}:${port}`);
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`Server listening on http://${host}:${port}`);
+      }
     });
   })
   .catch((err) => {

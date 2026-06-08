@@ -4,11 +4,6 @@ const FeatureSchema = new mongoose.Schema({
   type: String,
 }, { _id: false });
 
-const BrandSchema = new mongoose.Schema({
-  name: String,
-  category: String,
-}, { _id: false });
-
 const SizeSchema = new mongoose.Schema({
   size: String,
   avgSticks: Number,
@@ -33,6 +28,14 @@ const VariantSchema = new mongoose.Schema({
   detail: String,
   packing: String,
   price: Number,
+}, { _id: false });
+
+const BrandSchema = new mongoose.Schema({
+  name: String,
+  category: String,
+  description: String,
+  image: String,
+  variants: [VariantSchema],
 }, { _id: false });
 
 const VariantImageSchema = new mongoose.Schema({

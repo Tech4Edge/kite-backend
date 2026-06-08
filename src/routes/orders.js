@@ -23,14 +23,19 @@ router.post('/', async (req, res) => {
       city,
       note,
       paymentMethod,
+      items,
     } = req.body;
 
-    if (!['product', 'promotion'].includes(type)) {
+    if (!['product', 'promotion', 'cart'].includes(type)) {
       return res.status(400).json({ message: 'Invalid order type' });
     }
-    const parsedQuantity = Number(quantity);
-    if (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 1000) {
+    const parsedQuantity = quantity ? Number(quantity) : undefined;
+    if (type !== 'cart' && (!Number.isInteger(parsedQuantity) || parsedQuantity < 1 || parsedQuantity > 1000)) {
       return res.status(400).json({ message: 'Quantity must be an integer between 1 and 1000' });
+    }
+    
+    if (type === 'cart' && (!Array.isArray(items) || items.length === 0)) {
+      return res.status(400).json({ message: 'Cart orders must contain at least one item' });
     }
 
     const normalizedCustomerName = String(customerName || '').trim();
@@ -58,7 +63,7 @@ router.post('/', async (req, res) => {
       if (!productOrPromotion) {
         return res.status(404).json({ message: 'Product not found' });
       }
-    } else {
+    } else if (type === 'promotion') {
       if (!promotionId) {
         return res.status(400).json({ message: 'promotionId is required for promotion orders' });
       }
@@ -74,6 +79,7 @@ router.post('/', async (req, res) => {
       promotionId: type === 'promotion' ? promotionId : undefined,
       selectedSkuOrSize,
       quantity: parsedQuantity,
+      items: type === 'cart' ? items : undefined,
       customerName: normalizedCustomerName,
       phone: normalizedPhone,
       email,

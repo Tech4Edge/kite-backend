@@ -78,7 +78,17 @@ async function applyCloudinaryUploads(req, payload) {
     }))
     .filter((file) => Number.isInteger(file.variantIndex) && file.variantIndex >= 0)
     .sort((a, b) => a.variantIndex - b.variantIndex);
-  if (!primaryImage && !galleryImages.length && !variantImageFiles.length) {
+
+  const brandImageFiles = allFiles
+    .filter((file) => /^brandImageFile_\d+$/i.test(file.fieldname))
+    .map((file) => ({
+      ...file,
+      brandIndex: Number(file.fieldname.split("_").pop()),
+    }))
+    .filter((file) => Number.isInteger(file.brandIndex) && file.brandIndex >= 0)
+    .sort((a, b) => a.brandIndex - b.brandIndex);
+
+  if (!primaryImage && !galleryImages.length && !variantImageFiles.length && !brandImageFiles.length) {
     return payload;
   }
 
@@ -119,6 +129,25 @@ async function applyCloudinaryUploads(req, payload) {
     payload.variantImages = nextVariantImages.filter(
       (item) => item?.name || item?.image,
     );
+  }
+
+  if (brandImageFiles.length) {
+    const uploadedBrandImages = await Promise.all(
+      brandImageFiles.map((file) =>
+        uploadImageBuffer(file, { folder: "kite/products/brands" }),
+      ),
+    );
+    const nextBrands = Array.isArray(payload.brands)
+      ? [...payload.brands]
+      : [];
+    uploadedBrandImages.forEach((uploadedUrl, idx) => {
+      const brandIndex = brandImageFiles[idx].brandIndex;
+      nextBrands[brandIndex] = {
+        ...(nextBrands[brandIndex] || {}),
+        image: uploadedUrl,
+      };
+    });
+    payload.brands = nextBrands;
   }
 
   return payload;

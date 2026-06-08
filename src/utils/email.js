@@ -89,13 +89,16 @@ export async function sendOrderEmail(order, productOrPromotion) {
   }
 
   const isProduct = order.type === "product";
-  const itemName = isProduct
-    ? productOrPromotion?.title || order.productId
-    : productOrPromotion?.title || order.promotionId;
-  const orderTypeLabel = isProduct ? "Product Order" : "Promotion Order";
-  const subject = isProduct
+  const isCart = order.type === "cart";
+  const itemName = isCart
+    ? "Cart Order"
+    : (isProduct
+      ? productOrPromotion?.title || order.productId
+      : productOrPromotion?.title || order.promotionId);
+  const orderTypeLabel = isCart ? "Cart Order" : (isProduct ? "Product Order" : "Promotion Order");
+  const subject = isCart ? `New Cart Order` : (isProduct
     ? `New product order: ${itemName}`
-    : `New promotion order: ${itemName}`;
+    : `New promotion order: ${itemName}`);
 
   const orderId = displayValue(order._id || order.id || order.orderId);
   const createdAt = formatDateTime(order.createdAt);
@@ -111,15 +114,24 @@ export async function sendOrderEmail(order, productOrPromotion) {
   const lines = [];
   lines.push(`Order ID: ${orderId}`);
   lines.push(`Order Type: ${orderTypeLabel}`);
-  if (isProduct) {
+  if (isCart) {
+    lines.push(`Cart Items:`);
+    (order.items || []).forEach((item, i) => {
+      lines.push(`  ${i + 1}. Product: ${item.productId} ${item.brandName ? `(${item.brandName})` : ''}`);
+      lines.push(`     Variant: ${item.selectedVariant || 'N/A'}`);
+      lines.push(`     Qty: ${item.quantity}`);
+    });
+  } else if (isProduct) {
     lines.push(`Product: ${itemName}`);
   } else {
     lines.push(`Promotion Package: ${itemName}`);
   }
-  if (order.selectedSkuOrSize) {
+  if (!isCart && order.selectedSkuOrSize) {
     lines.push(`Selected SKU/Size: ${selectedSkuOrSize}`);
   }
-  lines.push(`Quantity: ${displayValue(order.quantity, 1)}`);
+  if (!isCart) {
+    lines.push(`Quantity: ${displayValue(order.quantity, 1)}`);
+  }
   lines.push("");
   lines.push("Customer Details:");
   lines.push(`Name: ${order.customerName}`);
@@ -203,10 +215,34 @@ export async function sendOrderEmail(order, productOrPromotion) {
                         <div style="font-size: 13px; color: #00AEEF; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">Order Overview</div>
                         <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                           ${buildInfoRow("Order ID", orderId)}
-                          ${buildInfoRow(isProduct ? "Product" : "Promotion Package", itemName)}
-                          ${order.selectedSkuOrSize ? buildInfoRow("Selected SKU/Size", selectedSkuOrSize) : ""}
-                          ${buildInfoRow("Quantity", displayValue(order.quantity, 1))}
+                          ${!isCart ? buildInfoRow(isProduct ? "Product" : "Promotion Package", itemName) : ""}
+                          ${!isCart && order.selectedSkuOrSize ? buildInfoRow("Selected SKU/Size", selectedSkuOrSize) : ""}
+                          ${!isCart ? buildInfoRow("Quantity", displayValue(order.quantity, 1)) : ""}
                           ${buildInfoRow("Created At", createdAt)}
+                          ${isCart ? `
+                          <tr>
+                            <td colspan="2" style="padding-top: 12px;">
+                              <div style="font-size: 13px; color: #00AEEF; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">Cart Items</div>
+                              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #FFFFFF; border: 1px solid #E4E4E4; border-radius: 8px; border-collapse: separate;">
+                                ${(order.items || []).map((item, index) => `
+                                  <tr>
+                                    <td style="padding: 8px 12px; border-bottom: ${index === (order.items || []).length - 1 ? 'none' : '1px solid #EAEAEA'};">
+                                      <div style="font-size: 13px; font-weight: 600; color: #222222;">
+                                        ${escapeHtml(item.productId)} ${item.brandName ? escapeHtml('(' + item.brandName + ')') : ''}
+                                      </div>
+                                      <div style="font-size: 12px; color: #666666; margin-top: 4px;">
+                                        Variant: ${escapeHtml(item.selectedVariant || 'N/A')}
+                                      </div>
+                                    </td>
+                                    <td align="right" style="padding: 8px 12px; border-bottom: ${index === (order.items || []).length - 1 ? 'none' : '1px solid #EAEAEA'}; font-size: 13px; font-weight: 700; color: #222222;">
+                                      x${escapeHtml(item.quantity)}
+                                    </td>
+                                  </tr>
+                                `).join("")}
+                              </table>
+                            </td>
+                          </tr>
+                          ` : ""}
                         </table>
                       </td>
                     </tr>

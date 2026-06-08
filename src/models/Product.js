@@ -35,6 +35,8 @@ const BrandSchema = new mongoose.Schema({
   category: String,
   description: String,
   image: String,
+  tagline: String,
+  features: [String],
   variants: [VariantSchema],
 }, { _id: false });
 

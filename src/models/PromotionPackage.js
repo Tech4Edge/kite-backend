@@ -16,6 +16,7 @@ const PromotionPackageSchema = new mongoose.Schema({
   items: [PromotionItemSchema],
   totalQuantity: Number,
   totalPrice: Number,
+  shippingCost: { type: Number, default: null },
   displayOrder: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true },
 }, { timestamps: true });

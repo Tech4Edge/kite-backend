@@ -65,6 +65,7 @@ const ProductSchema = new mongoose.Schema({
   skus: [SkuSchema],
   facilities: [FacilitySchema],
   services: { type: String },
+  shippingCost: { type: Number, default: null },
   displayOrder: { type: Number, default: 0 },
   carouselOrder: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true },

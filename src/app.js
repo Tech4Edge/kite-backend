@@ -97,9 +97,12 @@ app.get("/api", (_req, res) => {
   });
 });
 
+import settingsRouter from "./routes/settings.js";
+
 app.use("/api/products", productsRouter);
 app.use("/api/promotions", promotionsRouter);
 app.use("/api/orders", ordersRouter);
+app.use("/api/settings", settingsRouter);
 app.use("/api/admin", adminAuthRouter);
 app.use("/api/admin/products", adminProductsRouter);
 app.use("/api/admin/promotions", adminPromotionsRouter);

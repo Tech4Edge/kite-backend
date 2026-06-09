@@ -1,7 +1,9 @@
 import mongoose from 'mongoose';
 
 const OrderItemSchema = new mongoose.Schema({
-  productId: { type: String, required: true },
+  itemType: { type: String, enum: ['product', 'promotion'], default: 'product' },
+  productId: { type: String },
+  promotionId: { type: String },
   brandName: { type: String },
   selectedVariant: { type: String },
   quantity: { type: Number, required: true, min: 1, max: 1000 },
@@ -15,6 +17,8 @@ const OrderSchema = new mongoose.Schema({
   selectedSkuOrSize: { type: String },
   quantity: { type: Number, min: 1, max: 1000 }, // No longer strictly required for cart orders
   items: [OrderItemSchema],
+  totalAmount: { type: Number },
+  shippingCost: { type: Number },
   customerName: { type: String, required: true },
   phone: { type: String, required: true },
   email: { type: String },

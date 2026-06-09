@@ -117,8 +117,12 @@ export async function sendOrderEmail(order, productOrPromotion) {
   if (isCart) {
     lines.push(`Cart Items:`);
     (order.items || []).forEach((item, i) => {
-      lines.push(`  ${i + 1}. Product: ${item.productId} ${item.brandName ? `(${item.brandName})` : ''}`);
-      lines.push(`     Variant: ${item.selectedVariant || 'N/A'}`);
+      if (item.itemType === 'promotion') {
+        lines.push(`  ${i + 1}. Promotion: ${item.promotionId}`);
+      } else {
+        lines.push(`  ${i + 1}. Product: ${item.productId} ${item.brandName ? `(${item.brandName})` : ''}`);
+        lines.push(`     Variant: ${item.selectedVariant || 'N/A'}`);
+      }
       lines.push(`     Qty: ${item.quantity}`);
     });
   } else if (isProduct) {
@@ -131,6 +135,12 @@ export async function sendOrderEmail(order, productOrPromotion) {
   }
   if (!isCart) {
     lines.push(`Quantity: ${displayValue(order.quantity, 1)}`);
+  }
+  if (order.shippingCost != null) {
+    lines.push(`Shipping Cost: Rs ${order.shippingCost}`);
+  }
+  if (order.totalAmount != null) {
+    lines.push(`Total Amount: Rs ${order.totalAmount}`);
   }
   lines.push("");
   lines.push("Customer Details:");
@@ -218,6 +228,8 @@ export async function sendOrderEmail(order, productOrPromotion) {
                           ${!isCart ? buildInfoRow(isProduct ? "Product" : "Promotion Package", itemName) : ""}
                           ${!isCart && order.selectedSkuOrSize ? buildInfoRow("Selected SKU/Size", selectedSkuOrSize) : ""}
                           ${!isCart ? buildInfoRow("Quantity", displayValue(order.quantity, 1)) : ""}
+                          ${order.shippingCost != null ? buildInfoRow("Shipping Cost", `Rs ${order.shippingCost}`) : ""}
+                          ${order.totalAmount != null ? buildInfoRow("Total Amount", `Rs ${order.totalAmount}`) : ""}
                           ${buildInfoRow("Created At", createdAt)}
                           ${isCart ? `
                           <tr>
@@ -228,11 +240,13 @@ export async function sendOrderEmail(order, productOrPromotion) {
                                   <tr>
                                     <td style="padding: 8px 12px; border-bottom: ${index === (order.items || []).length - 1 ? 'none' : '1px solid #EAEAEA'};">
                                       <div style="font-size: 13px; font-weight: 600; color: #222222;">
-                                        ${escapeHtml(item.productId)} ${item.brandName ? escapeHtml('(' + item.brandName + ')') : ''}
+                                        ${item.itemType === 'promotion' ? 'Promotion: ' + escapeHtml(item.promotionId) : escapeHtml(item.productId) + (item.brandName ? ' ' + escapeHtml('(' + item.brandName + ')') : '')}
                                       </div>
+                                      ${item.itemType !== 'promotion' ? `
                                       <div style="font-size: 12px; color: #666666; margin-top: 4px;">
                                         Variant: ${escapeHtml(item.selectedVariant || 'N/A')}
                                       </div>
+                                      ` : ''}
                                     </td>
                                     <td align="right" style="padding: 8px 12px; border-bottom: ${index === (order.items || []).length - 1 ? 'none' : '1px solid #EAEAEA'}; font-size: 13px; font-weight: 700; color: #222222;">
                                       x${escapeHtml(item.quantity)}

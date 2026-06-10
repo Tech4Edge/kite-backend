@@ -307,6 +307,7 @@ export async function sendOrderEmail(order, productOrPromotion) {
   </html>
   `;
 
+  // Send email to admin
   await transporter.sendMail({
     from: process.env.SMTP_FROM || adminOrderEmail,
     to: adminOrderEmail,
@@ -314,4 +315,20 @@ export async function sendOrderEmail(order, productOrPromotion) {
     text,
     html,
   });
+
+  // Send email to customer
+  if (order.email) {
+    const customerSubject = isCart ? "Your Kite Order Confirmation" : "Your Order Confirmation: " + itemName;
+    const customerHtml = html
+      .replace('>New Order Received<', '>Your Order Confirmed<')
+      .replace(ctaMarkup, '');
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || adminOrderEmail,
+      to: order.email,
+      subject: customerSubject,
+      text: "Thank you for your order! Your order details are below.\\n\\n" + text,
+      html: customerHtml,
+    });
+  }
 }

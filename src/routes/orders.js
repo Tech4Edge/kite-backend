@@ -24,6 +24,8 @@ router.post('/', async (req, res) => {
       note,
       paymentMethod,
       items,
+      totalAmount,
+      shippingCost,
     } = req.body;
 
     if (!['product', 'promotion', 'cart'].includes(type)) {
@@ -46,8 +48,8 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Invalid phone number format' });
     }
 
-    if (!normalizedCustomerName || !normalizedAddress || !normalizedCity || !paymentMethod) {
-      return res.status(400).json({ message: 'Missing required customer fields' });
+    if (!normalizedCustomerName || !normalizedAddress || !normalizedCity || !paymentMethod || !email) {
+      return res.status(400).json({ message: 'Missing required customer fields (including email)' });
     }
 
     if (!['COD', 'Easypaisa', 'JazzCash'].includes(paymentMethod)) {
@@ -87,6 +89,8 @@ router.post('/', async (req, res) => {
       city: normalizedCity,
       note,
       paymentMethod,
+      totalAmount,
+      shippingCost,
     });
 
     // Fire-and-forget email; errors shouldn't block order creation

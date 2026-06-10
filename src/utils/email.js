@@ -49,70 +49,30 @@ function formatDateTime(value) {
   });
 }
 
-function getStatusColors(status) {
-  switch (String(status || "").toLowerCase()) {
-    case "confirmed":
-      return { bg: "#E8FFF4", text: "#007A46" };
-    case "shipped":
-      return { bg: "#EAF5FF", text: "#005F99" };
-    case "cancelled":
-      return { bg: "#FFEDEE", text: "#A11A22" };
-    case "pending":
-    default:
-      return { bg: "#FFF7E6", text: "#8A5A00" };
-  }
-}
-
-function buildInfoRow(label, value) {
-  return `
-    <tr>
-      <td style="padding: 9px 0; color: #666666; font-size: 14px; vertical-align: top; width: 160px;">
-        ${escapeHtml(label)}
-      </td>
-      <td style="padding: 9px 0; color: #222222; font-size: 14px; font-weight: 600; vertical-align: top;">
-        ${escapeHtml(displayValue(value))}
-      </td>
-    </tr>
-  `;
-}
-
-export async function sendOrderEmail(order, productOrPromotion) {
-  const transporter = createTransporter();
-
-  const adminOrderEmail =
-    process.env.ADMIN_ORDER_EMAIL || process.env.CLIENT_ORDER_EMAIL;
-  if (!adminOrderEmail) {
-    console.warn(
-      "ADMIN_ORDER_EMAIL (or CLIENT_ORDER_EMAIL) not set; skipping email send",
-    );
-    return;
-  }
-
+function getOrderTypeLabel(order) {
   const isProduct = order.type === "product";
   const isCart = order.type === "cart";
-  const itemName = isCart
+  return isCart ? "Cart Order" : (isProduct ? "Product Order" : "Promotion Order");
+}
+
+function getItemName(order, productOrPromotion) {
+  const isProduct = order.type === "product";
+  const isCart = order.type === "cart";
+  return isCart
     ? "Cart Order"
     : (isProduct
       ? productOrPromotion?.title || order.productId
       : productOrPromotion?.title || order.promotionId);
-  const orderTypeLabel = isCart ? "Cart Order" : (isProduct ? "Product Order" : "Promotion Order");
-  const subject = isCart ? `New Cart Order` : (isProduct
-    ? `New product order: ${itemName}`
-    : `New promotion order: ${itemName}`);
+}
 
-  const orderId = displayValue(order._id || order.id || order.orderId);
-  const createdAt = formatDateTime(order.createdAt);
-  const paymentMethod = displayValue(order.paymentMethod);
-  const status = displayValue(order.status || "pending");
-  const selectedSkuOrSize = displayValue(order.selectedSkuOrSize);
-  const adminPanelUrl = process.env.ADMIN_PANEL_URL || process.env.FRONTEND_URL;
-  const logoUrl = "https://kitepk.com/logo.png";
-  const phoneHref = displayValue(order.phone, "").replace(/[^\d+]/g, "");
-  const emailHref = displayValue(order.email, "").trim();
-  const statusColors = getStatusColors(status);
+function buildOrderDetailsText(order, productOrPromotion) {
+  const isProduct = order.type === "product";
+  const isCart = order.type === "cart";
+  const itemName = getItemName(order, productOrPromotion);
+  const orderTypeLabel = getOrderTypeLabel(order);
 
   const lines = [];
-  lines.push(`Order ID: ${orderId}`);
+  lines.push(`Order ID: ${displayValue(order._id || order.id || order.orderId)}`);
   lines.push(`Order Type: ${orderTypeLabel}`);
   if (isCart) {
     lines.push(`Cart Items:`);
@@ -131,204 +91,168 @@ export async function sendOrderEmail(order, productOrPromotion) {
     lines.push(`Promotion Package: ${itemName}`);
   }
   if (!isCart && order.selectedSkuOrSize) {
-    lines.push(`Selected SKU/Size: ${selectedSkuOrSize}`);
+    lines.push(`Selected SKU/Size: ${order.selectedSkuOrSize}`);
   }
   if (!isCart) {
     lines.push(`Quantity: ${displayValue(order.quantity, 1)}`);
   }
-  if (order.shippingCost != null) {
-    lines.push(`Shipping Cost: Rs ${order.shippingCost}`);
+  if (order.shippingCost != null) lines.push(`Shipping Cost: Rs ${order.shippingCost}`);
+  if (order.totalAmount != null) lines.push(`Total Amount: Rs ${order.totalAmount}`);
+  
+  return lines.join("\n");
+}
+
+export async function sendOrderEmail(order, productOrPromotion) {
+  const transporter = createTransporter();
+
+  const adminOrderEmail = process.env.ADMIN_ORDER_EMAIL || process.env.CLIENT_ORDER_EMAIL;
+  if (!adminOrderEmail) {
+    console.warn("ADMIN_ORDER_EMAIL not set; skipping email send");
+    return;
   }
-  if (order.totalAmount != null) {
-    lines.push(`Total Amount: Rs ${order.totalAmount}`);
-  }
-  lines.push("");
-  lines.push("Customer Details:");
-  lines.push(`Name: ${order.customerName}`);
-  lines.push(`Phone: ${order.phone}`);
-  if (order.email) lines.push(`Email: ${order.email}`);
-  lines.push(`City: ${order.city}`);
-  lines.push(`Address: ${order.address}`);
-  if (order.note) lines.push(`Note: ${order.note}`);
-  lines.push("");
-  lines.push(`Payment Method: ${order.paymentMethod}`);
-  lines.push(`Status: ${order.status}`);
-  lines.push("");
-  lines.push(`Created At: ${createdAt}`);
 
-  const text = lines.join("\n");
+  const isCart = order.type === "cart";
+  const itemName = getItemName(order, productOrPromotion);
+  const orderTypeLabel = getOrderTypeLabel(order);
+  const subject = isCart ? `New Cart Order` : (order.type === "product" ? `New product order: ${itemName}` : `New promotion order: ${itemName}`);
 
-  const ctaMarkup = adminPanelUrl
-    ? `
-      <tr>
-        <td align="center" style="padding: 6px 0 0 0;">
-          <a href="${escapeHtml(adminPanelUrl)}" style="display: inline-block; background: #00AEEF; color: #FFFFFF; text-decoration: none; font-weight: 700; font-size: 14px; letter-spacing: 0.2px; padding: 12px 22px; border-radius: 999px;">
-            Open Admin Panel
-          </a>
-        </td>
-      </tr>
-    `
-    : "";
+  const createdAt = formatDateTime(order.createdAt);
+  const paymentMethod = displayValue(order.paymentMethod);
+  const adminPanelUrl = process.env.ADMIN_PANEL_URL || process.env.FRONTEND_URL;
 
-  const html = `
-  <!doctype html>
-  <html>
-    <head>
-      <meta charset="utf-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>${escapeHtml(subject)}</title>
-    </head>
-    <body style="margin: 0; padding: 0; background: #F3F8FB; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #222222;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #F3F8FB; padding: 28px 14px;">
-        <tr>
-          <td align="center">
-            <table role="presentation" width="680" cellspacing="0" cellpadding="0" style="max-width: 680px; width: 100%; background: #FFFFFF; border-radius: 18px; overflow: hidden; border: 1px solid #DDECF7; box-shadow: 0 8px 30px rgba(0, 56, 87, 0.08);">
-              <tr>
-                <td style="background: linear-gradient(135deg, #00AEEF 0%, #0095CC 100%); padding: 24px 26px;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                    <tr>
-                      <td valign="middle" style="width: 88px;">
-                        <img src="${logoUrl}" alt="Kite" width="70" style="width: 70px; height: auto; display: block; border: 0; border-radius: 10px;" />
-                      </td>
-                      <td valign="middle" style="color: #FFFFFF;">
-                        <div style="font-size: 22px; font-weight: 800; line-height: 1.2;">New Order Received</div>
-                        <div style="font-size: 13px; opacity: 0.9; margin-top: 5px;">${escapeHtml(orderTypeLabel)} for Kite FMCG</div>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
+  const orderDetailsText = buildOrderDetailsText(order, productOrPromotion);
 
-              <tr>
-                <td style="padding: 20px 26px 0 26px;">
-                  <table role="presentation" cellspacing="0" cellpadding="0" style="width: 100%;">
-                    <tr>
-                      <td style="padding-right: 8px; padding-bottom: 10px;">
-                        <span style="display: inline-block; background: #EAF8FF; color: #005F8A; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; padding: 7px 11px; border-radius: 999px;">${escapeHtml(orderTypeLabel)}</span>
-                      </td>
-                      <td style="padding-right: 8px; padding-bottom: 10px;">
-                        <span style="display: inline-block; background: ${statusColors.bg}; color: ${statusColors.text}; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; padding: 7px 11px; border-radius: 999px;">Status: ${escapeHtml(status)}</span>
-                      </td>
-                      <td style="padding-bottom: 10px;">
-                        <span style="display: inline-block; background: #FFF0F8; color: #A61565; font-size: 12px; font-weight: 700; letter-spacing: 0.2px; padding: 7px 11px; border-radius: 999px;">Payment: ${escapeHtml(paymentMethod)}</span>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              <tr>
-                <td style="padding: 16px 26px 0 26px;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #F8FCFF; border: 1px solid #DCEFFC; border-radius: 14px;">
-                    <tr>
-                      <td style="padding: 16px 18px;">
-                        <div style="font-size: 13px; color: #00AEEF; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">Order Overview</div>
-                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                          ${buildInfoRow("Order ID", orderId)}
-                          ${!isCart ? buildInfoRow(isProduct ? "Product" : "Promotion Package", itemName) : ""}
-                          ${!isCart && order.selectedSkuOrSize ? buildInfoRow("Selected SKU/Size", selectedSkuOrSize) : ""}
-                          ${!isCart ? buildInfoRow("Quantity", displayValue(order.quantity, 1)) : ""}
-                          ${order.shippingCost != null ? buildInfoRow("Shipping Cost", `Rs ${order.shippingCost}`) : ""}
-                          ${order.totalAmount != null ? buildInfoRow("Total Amount", `Rs ${order.totalAmount}`) : ""}
-                          ${buildInfoRow("Created At", createdAt)}
-                          ${isCart ? `
-                          <tr>
-                            <td colspan="2" style="padding-top: 12px;">
-                              <div style="font-size: 13px; color: #00AEEF; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">Cart Items</div>
-                              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #FFFFFF; border: 1px solid #E4E4E4; border-radius: 8px; border-collapse: separate;">
-                                ${(order.items || []).map((item, index) => `
-                                  <tr>
-                                    <td style="padding: 8px 12px; border-bottom: ${index === (order.items || []).length - 1 ? 'none' : '1px solid #EAEAEA'};">
-                                      <div style="font-size: 13px; font-weight: 600; color: #222222;">
-                                        ${item.itemType === 'promotion' ? 'Promotion: ' + escapeHtml(item.promotionId) : escapeHtml(item.productId) + (item.brandName ? ' ' + escapeHtml('(' + item.brandName + ')') : '')}
-                                      </div>
-                                      ${item.itemType !== 'promotion' ? `
-                                      <div style="font-size: 12px; color: #666666; margin-top: 4px;">
-                                        Variant: ${escapeHtml(item.selectedVariant || 'N/A')}
-                                      </div>
-                                      ` : ''}
-                                    </td>
-                                    <td align="right" style="padding: 8px 12px; border-bottom: ${index === (order.items || []).length - 1 ? 'none' : '1px solid #EAEAEA'}; font-size: 13px; font-weight: 700; color: #222222;">
-                                      x${escapeHtml(item.quantity)}
-                                    </td>
-                                  </tr>
-                                `).join("")}
-                              </table>
-                            </td>
-                          </tr>
-                          ` : ""}
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              <tr>
-                <td style="padding: 14px 26px 0 26px;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: #FFFFFF; border: 1px solid #E4E4E4; border-radius: 14px;">
-                    <tr>
-                      <td style="padding: 16px 18px;">
-                        <div style="font-size: 13px; color: #00AEEF; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">Customer Details</div>
-                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                          ${buildInfoRow("Name", order.customerName)}
-                          ${buildInfoRow("Phone", order.phone)}
-                          ${order.email ? buildInfoRow("Email", order.email) : ""}
-                          ${buildInfoRow("City", order.city)}
-                          ${buildInfoRow("Address", order.address)}
-                          ${order.note ? buildInfoRow("Note", order.note) : ""}
-                        </table>
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-
-              ${ctaMarkup}
-
-              <tr>
-                <td style="padding: 20px 26px 26px 26px;">
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top: 1px solid #EAEAEA;">
-                    <tr>
-                      <td style="padding-top: 16px; font-size: 12px; color: #7A7A7A; line-height: 1.65;">
-                        This is an automated order notification from Kite FMCG.<br />
-                        ${phoneHref ? `Customer phone: <a href="tel:${escapeHtml(phoneHref)}" style="color: #00AEEF; text-decoration: none;">${escapeHtml(order.phone)}</a><br />` : ""}
-                        ${emailHref ? `Customer email: <a href="mailto:${escapeHtml(emailHref)}" style="color: #00AEEF; text-decoration: none;">${escapeHtml(emailHref)}</a>` : ""}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-  </html>
+  const buildHtml = (title, showAdminBtn) => `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${escapeHtml(subject)}</title>
+      </head>
+      <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #fafafa; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; border: 1px solid #eaeaea;">
+          <h2 style="margin-top: 0; color: #111;">${escapeHtml(title)}</h2>
+          <p style="color: #555; font-size: 15px; line-height: 1.5;">
+            <strong>Order Type:</strong> ${escapeHtml(orderTypeLabel)}<br>
+            <strong>Status:</strong> ${escapeHtml(order.status || 'pending')}<br>
+            <strong>Payment:</strong> ${escapeHtml(paymentMethod)}<br>
+            <strong>Date:</strong> ${escapeHtml(createdAt)}
+          </p>
+          
+          <hr style="border: 0; border-top: 1px solid #eaeaea; margin: 20px 0;">
+          
+          <h3 style="margin-top: 0; color: #111;">Order Summary</h3>
+          <pre style="background: #f9f9f9; padding: 15px; border-radius: 6px; font-family: inherit; font-size: 14px; color: #444; border: 1px solid #eee; overflow-x: auto; white-space: pre-wrap;">${escapeHtml(orderDetailsText)}</pre>
+          
+          <hr style="border: 0; border-top: 1px solid #eaeaea; margin: 20px 0;">
+          
+          <h3 style="margin-top: 0; color: #111;">Customer Details</h3>
+          <p style="color: #555; font-size: 15px; line-height: 1.5;">
+            <strong>Name:</strong> ${escapeHtml(order.customerName)}<br>
+            <strong>Phone:</strong> ${escapeHtml(order.phone)}<br>
+            ${order.email ? `<strong>Email:</strong> ${escapeHtml(order.email)}<br>` : ''}
+            <strong>City:</strong> ${escapeHtml(order.city)}<br>
+            <strong>Address:</strong> ${escapeHtml(order.address)}<br>
+            ${order.note ? `<strong>Note:</strong> ${escapeHtml(order.note)}` : ''}
+          </p>
+          
+          ${showAdminBtn && adminPanelUrl ? `
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="${escapeHtml(adminPanelUrl)}" style="background: #000; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-weight: bold; display: inline-block;">
+              View in Admin Panel
+            </a>
+          </div>
+          ` : ''}
+        </div>
+      </body>
+    </html>
   `;
 
-  // Send email to admin
+  // Admin Email
   await transporter.sendMail({
     from: process.env.SMTP_FROM || adminOrderEmail,
     to: adminOrderEmail,
     subject,
-    text,
-    html,
+    text: `New Order Received\n\n` + orderDetailsText,
+    html: buildHtml("New Order Received", true),
   });
 
-  // Send email to customer
+  // Customer Email
   if (order.email) {
     const customerSubject = isCart ? "Your Kite Order Confirmation" : "Your Order Confirmation: " + itemName;
-    const customerHtml = html
-      .replace('>New Order Received<', '>Your Order Confirmed<')
-      .replace(ctaMarkup, '');
-
     await transporter.sendMail({
       from: process.env.SMTP_FROM || adminOrderEmail,
       to: order.email,
       subject: customerSubject,
-      text: "Thank you for your order! Your order details are below.\\n\\n" + text,
-      html: customerHtml,
+      text: "Thank you for your order!\n\n" + orderDetailsText,
+      html: buildHtml("Your Order is Confirmed", false),
     });
   }
+}
+
+export async function sendStatusUpdateEmail(order) {
+  const transporter = createTransporter();
+  const adminOrderEmail = process.env.ADMIN_ORDER_EMAIL || process.env.CLIENT_ORDER_EMAIL || process.env.SMTP_FROM;
+
+  if (!order.email) return; // Cannot send to customer if no email
+
+  const subject = `Update on your Kite Order (${order._id || order.id})`;
+  const orderDetailsText = buildOrderDetailsText(order, null);
+  const paymentMethod = displayValue(order.paymentMethod);
+  const createdAt = formatDateTime(order.createdAt);
+  const orderTypeLabel = getOrderTypeLabel(order);
+
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>${escapeHtml(subject)}</title>
+      </head>
+      <body style="margin: 0; padding: 20px; font-family: Arial, sans-serif; background: #fafafa; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; border: 1px solid #eaeaea;">
+          <h2 style="margin-top: 0; color: #111;">Order Status Update</h2>
+          <p style="color: #555; font-size: 16px; line-height: 1.5;">
+            Hi ${escapeHtml(order.customerName)},
+          </p>
+          <p style="color: #555; font-size: 16px; line-height: 1.5;">
+            The status of your order (<strong>${escapeHtml(order._id || order.id)}</strong>) has been updated to:
+          </p>
+          <div style="background: #f0f0f0; padding: 15px; border-radius: 6px; text-align: center; font-size: 18px; font-weight: bold; color: #111; text-transform: uppercase; margin: 20px 0;">
+            ${escapeHtml(order.status)}
+          </div>
+          
+          <hr style="border: 0; border-top: 1px solid #eaeaea; margin: 20px 0;">
+          
+          <h3 style="margin-top: 0; color: #111;">Order Summary</h3>
+          <p style="color: #555; font-size: 15px; line-height: 1.5;">
+            <strong>Order Type:</strong> ${escapeHtml(orderTypeLabel)}<br>
+            <strong>Payment:</strong> ${escapeHtml(paymentMethod)}<br>
+            <strong>Date:</strong> ${escapeHtml(createdAt)}
+          </p>
+          <pre style="background: #f9f9f9; padding: 15px; border-radius: 6px; font-family: inherit; font-size: 14px; color: #444; border: 1px solid #eee; overflow-x: auto; white-space: pre-wrap;">${escapeHtml(orderDetailsText)}</pre>
+          
+          <hr style="border: 0; border-top: 1px solid #eaeaea; margin: 20px 0;">
+
+          <p style="color: #555; font-size: 16px; line-height: 1.5;">
+            If you have any questions, feel free to reply to this email.
+          </p>
+          <p style="color: #555; font-size: 16px; line-height: 1.5; margin-top: 30px;">
+            Thank you,<br>
+            Kite FMCG
+          </p>
+        </div>
+      </body>
+    </html>
+  `;
+
+  await transporter.sendMail({
+    from: adminOrderEmail,
+    to: order.email,
+    subject,
+    text: `Hi ${order.customerName},\n\nYour order (${order._id || order.id}) status has been updated to: ${order.status}.\n\nOrder Details:\n${orderDetailsText}\n\nThank you,\nKite FMCG`,
+    html,
+  });
 }

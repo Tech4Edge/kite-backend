@@ -1,6 +1,7 @@
 import express from 'express';
 import Order from '../models/Order.js';
 import { requireAdminAuth } from '../utils/adminAuthMiddleware.js';
+import { sendStatusUpdateEmail } from '../utils/email.js';
 
 const router = express.Router();
 
@@ -47,6 +48,12 @@ router.patch('/:id/status', async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
+    
+    // Fire-and-forget status update email
+    sendStatusUpdateEmail(order.toObject()).catch(err => {
+      console.error('Failed to send status update email', err);
+    });
+
     res.json(order);
   } catch (err) {
     console.error('Error updating order status', err);

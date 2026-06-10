@@ -3,6 +3,7 @@ import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import PromotionPackage from '../models/PromotionPackage.js';
 import { sendOrderEmail } from '../utils/email.js';
+import { pusher } from '../utils/pusher.js';
 
 const router = express.Router();
 const PHONE_REGEX = /^(?:\+92|92|0)3\d{9}$/;
@@ -97,6 +98,16 @@ router.post('/', async (req, res) => {
     sendOrderEmail(order.toObject(), productOrPromotion).catch((err) => {
       console.error('Failed to send order email', err);
     });
+
+    // Trigger Pusher notification
+    if (pusher) {
+      pusher.trigger('admin-notifications', 'new-order', {
+        orderId: order._id,
+        customerName: order.customerName,
+        totalAmount: order.totalAmount,
+        type: order.type
+      }).catch(err => console.error('Failed to trigger Pusher event', err));
+    }
 
     res.status(201).json(order);
   } catch (err) {

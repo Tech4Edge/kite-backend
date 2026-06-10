@@ -1,27 +1,4 @@
-import nodemailer from "nodemailer";
-
-export function createTransporter() {
-  if (process.env.SMTP_HOST) {
-    const port = Number(process.env.SMTP_PORT || 587);
-    const secureFromEnv = String(process.env.SMTP_SECURE || "").toLowerCase();
-    const secure = secureFromEnv ? secureFromEnv === "true" : port === 465;
-
-    return nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port,
-      secure,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-  }
-
-  // Fallback: JSON transport for dev so we don't send real emails accidentally
-  return nodemailer.createTransport({
-    jsonTransport: true,
-  });
-}
+import emailjs from '@emailjs/nodejs';
 
 const htmlEscapeMap = {
   "&": "&amp;",
@@ -102,9 +79,31 @@ function buildOrderDetailsText(order, productOrPromotion) {
   return lines.join("\n");
 }
 
-export async function sendOrderEmail(order, productOrPromotion) {
-  const transporter = createTransporter();
+// Wrapper for EmailJS send
+async function sendViaEmailJS(templateId, templateParams) {
+  if (!process.env.EMAILJS_SERVICE_ID || !templateId || !process.env.EMAILJS_PUBLIC_KEY || !process.env.EMAILJS_PRIVATE_KEY) {
+    console.warn("[EmailJS] Missing required environment variables. Skipping email.");
+    return;
+  }
 
+  try {
+    await emailjs.send(
+      process.env.EMAILJS_SERVICE_ID,
+      templateId,
+      templateParams,
+      {
+        publicKey: process.env.EMAILJS_PUBLIC_KEY,
+        privateKey: process.env.EMAILJS_PRIVATE_KEY,
+      }
+    );
+    console.log(`[EmailJS] Successfully sent email using template ${templateId}`);
+  } catch (error) {
+    console.error(`[EmailJS Error] Failed to send email via template ${templateId}. Details:`, error);
+    throw error;
+  }
+}
+
+export async function sendOrderEmail(order, productOrPromotion) {
   const adminOrderEmail = process.env.ADMIN_ORDER_EMAIL || process.env.CLIENT_ORDER_EMAIL;
   if (!adminOrderEmail) {
     console.warn("ADMIN_ORDER_EMAIL not set; skipping email send");
@@ -169,33 +168,27 @@ export async function sendOrderEmail(order, productOrPromotion) {
     </html>
   `;
 
-  // Admin Email
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || adminOrderEmail,
-    to: adminOrderEmail,
-    subject,
-    text: `New Order Received\n\n` + orderDetailsText,
-    html: buildHtml("New Order Received", true),
-  });
+  // 1. Send Admin Email via EmailJS
+  if (process.env.EMAILJS_TEMPLATE_ID_ADMIN) {
+    await sendViaEmailJS(process.env.EMAILJS_TEMPLATE_ID_ADMIN, {
+      subject: subject,
+      html_content: buildHtml("New Order Received", true),
+    });
+  }
 
-  // Customer Email
-  if (order.email) {
+  // 2. Send Customer Confirmation Email via EmailJS
+  if (order.email && process.env.EMAILJS_TEMPLATE_ID_CUSTOMER) {
     const customerSubject = isCart ? "Your Kite Order Confirmation" : "Your Order Confirmation: " + itemName;
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || adminOrderEmail,
-      to: order.email,
+    await sendViaEmailJS(process.env.EMAILJS_TEMPLATE_ID_CUSTOMER, {
+      to_email: order.email,
       subject: customerSubject,
-      text: "Thank you for your order!\n\n" + orderDetailsText,
-      html: buildHtml("Your Order is Confirmed", false),
+      html_content: buildHtml("Your Order is Confirmed", false),
     });
   }
 }
 
 export async function sendStatusUpdateEmail(order) {
-  const transporter = createTransporter();
-  const adminOrderEmail = process.env.ADMIN_ORDER_EMAIL || process.env.CLIENT_ORDER_EMAIL || process.env.SMTP_FROM;
-
-  if (!order.email) return; // Cannot send to customer if no email
+  if (!order.email || !process.env.EMAILJS_TEMPLATE_ID_CUSTOMER) return; // Cannot send if no email or missing template
 
   const subject = `Update on your Kite Order (${order._id || order.id})`;
   const orderDetailsText = buildOrderDetailsText(order, null);
@@ -248,11 +241,9 @@ export async function sendStatusUpdateEmail(order) {
     </html>
   `;
 
-  await transporter.sendMail({
-    from: adminOrderEmail,
-    to: order.email,
-    subject,
-    text: `Hi ${order.customerName},\n\nYour order (${order._id || order.id}) status has been updated to: ${order.status}.\n\nOrder Details:\n${orderDetailsText}\n\nThank you,\nKite FMCG`,
-    html,
+  await sendViaEmailJS(process.env.EMAILJS_TEMPLATE_ID_CUSTOMER, {
+    to_email: order.email,
+    subject: subject,
+    html_content: html,
   });
 }

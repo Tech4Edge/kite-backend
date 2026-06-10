@@ -51,7 +51,7 @@ router.patch('/:id/status', async (req, res) => {
     
     // Fire-and-forget status update email
     sendStatusUpdateEmail(order.toObject()).catch(err => {
-      console.error('Failed to send status update email', err);
+      console.error('[Email Error] Failed to send status update email. Full details:', err);
     });
 
     res.json(order);

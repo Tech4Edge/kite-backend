@@ -96,7 +96,7 @@ router.post('/', async (req, res) => {
 
     // Fire-and-forget email; errors shouldn't block order creation
     sendOrderEmail(order.toObject(), productOrPromotion).catch((err) => {
-      console.error('Failed to send order email', err);
+      console.error('[Email Error] Failed to send order email. Full details:', err);
     });
 
     // Trigger Pusher notification

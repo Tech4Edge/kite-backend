@@ -23,6 +23,7 @@ function formatDateTime(value) {
   return date.toLocaleString("en-PK", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "Asia/Karachi", // Pakistan Standard Time (UTC+5)
   });
 }
 
@@ -49,7 +50,7 @@ function buildOrderDetailsText(order, productOrPromotion) {
   const orderTypeLabel = getOrderTypeLabel(order);
 
   const lines = [];
-  lines.push(`Order ID: ${displayValue(order._id || order.id || order.orderId)}`);
+  lines.push(`Order No.: ${displayValue(order.orderNumber || order._id || order.id || order.orderId)}`);
   lines.push(`Order Type: ${orderTypeLabel}`);
   if (isCart) {
     lines.push(`Cart Items:`);
@@ -96,9 +97,14 @@ async function sendViaEmailJS(templateId, templateParams) {
         privateKey: process.env.EMAILJS_PRIVATE_KEY,
       }
     );
-    console.log(`[EmailJS] Successfully sent email using template ${templateId}`);
+    console.log(`[EmailJS] Successfully sent via template ${templateId}`);
   } catch (error) {
-    console.error(`[EmailJS Error] Failed to send email via template ${templateId}. Details:`, error);
+    // EmailJS SDK throws { status, text } objects, not standard Errors
+    console.error(`[EmailJS Error] Failed via template ${templateId}:`, {
+      status: error?.status,
+      text:   error?.text,
+      message: error?.message,
+    });
     throw error;
   }
 }
@@ -170,7 +176,10 @@ export async function sendOrderEmail(order, productOrPromotion) {
 
   // 1. Send Admin Email via EmailJS
   if (process.env.EMAILJS_TEMPLATE_ID_ADMIN) {
+    console.log(`[EmailJS] Sending admin order email to ${adminOrderEmail}...`);
     await sendViaEmailJS(process.env.EMAILJS_TEMPLATE_ID_ADMIN, {
+      to_name: "Admin",
+      to_email: adminOrderEmail,   // Required by most EmailJS templates
       subject: subject,
       html_content: buildHtml("New Order Received", true),
     });

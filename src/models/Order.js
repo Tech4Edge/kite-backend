@@ -11,6 +11,7 @@ const OrderItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const OrderSchema = new mongoose.Schema({
+  orderNumber: { type: String, unique: true, sparse: true }, // e.g. KT-001
   type: { type: String, enum: ['product', 'promotion', 'cart'], required: true },
   productId: { type: String },
   promotionId: { type: String },

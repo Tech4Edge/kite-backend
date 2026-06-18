@@ -76,7 +76,12 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Generate sequential order number (KT-001, KT-002, …)
+    const orderCount = await Order.countDocuments();
+    const orderNumber = `KT-${String(orderCount + 1).padStart(3, '0')}`;
+
     const order = await Order.create({
+      orderNumber,
       type,
       productId: type === 'product' ? productId : undefined,
       promotionId: type === 'promotion' ? promotionId : undefined,
@@ -96,7 +101,12 @@ router.post('/', async (req, res) => {
 
     // Fire-and-forget email; errors shouldn't block order creation
     sendOrderEmail(order.toObject(), productOrPromotion).catch((err) => {
-      console.error('[Email Error] Failed to send order email. Full details:', err);
+      console.error('[Email Error] sendOrderEmail failed:', {
+        message: err?.message,
+        status:  err?.status,
+        text:    err?.text,
+        stack:   err?.stack,
+      });
     });
 
     // Trigger Pusher notification
